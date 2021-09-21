@@ -96,7 +96,7 @@ class FreGAN(torch.nn.Module):
         for i, (u, k) in enumerate(zip(self.upsample_rates, self.up_kernels)):
             self.ups.append(weight_norm(
                 ConvTranspose1d(h.upsample_initial_channel // (2 ** i), h.upsample_initial_channel // (2 ** (i + 1)),
-                                k, u, padding=(k - u) // 2)))
+                                k, u, padding=(u//2 + u%2), output_padding=u%2)))
 
             if i > (self.num_upsamples - top_k):
                 self.res_output.append(
@@ -111,7 +111,8 @@ class FreGAN(torch.nn.Module):
                     weight_norm(
                         ConvTranspose1d(kr, h.upsample_initial_channel // (2 ** i),
                                         self.up_kernels[i - 1], self.upsample_rates[i - 1],
-                                        padding=(self.up_kernels[i - 1] - self.upsample_rates[i - 1]) // 2))
+                                        padding=self.upsample_rates[i - 1] // 2 + self.upsample_rates[i - 1] % 2,
+                                        output_padding = self.upsample_rates[i - 1] % 2))
                 )
                 kr = h.upsample_initial_channel // (2 ** i)
 

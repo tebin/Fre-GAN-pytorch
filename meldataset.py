@@ -1,19 +1,24 @@
 import math
 import os
+from pathlib import Path
 import random
 import torch
 import torch.utils.data
 import numpy as np
+import librosa
 from librosa.util import normalize
-from scipy.io.wavfile import read
+import soundfile as sf
 from librosa.filters import mel as librosa_mel_fn
 
 MAX_WAV_VALUE = 32768.0
 
 
-def load_wav(full_path):
-    sampling_rate, data = read(full_path)
-    return data, sampling_rate
+def load_audio(path, resample=24000):
+    wav, sr = sf.read(path, dtype='float32')
+    wav = wav.T
+    wav = librosa.to_mono(wav)
+    wav = librosa.resample(wav, sr, resample, res_type='scipy')
+    return np.clip(wav, -1.0, 1.0)
 
 
 def dynamic_range_compression(x, C=1, clip_val=1e-5):
@@ -84,10 +89,10 @@ def get_dataset_filelist(a):
 
 
 class MelDataset(torch.utils.data.Dataset):
-    def __init__(self, training_files, segment_size, n_fft, num_mels,
+    def __init__(self, dir, segment_size, n_fft, num_mels,
                  hop_size, win_size, sampling_rate,  fmin, fmax, split=True, shuffle=True, n_cache_reuse=1,
-                 device=None, fmax_loss=None, fine_tuning=False, base_mels_path=None):
-        self.audio_files = training_files
+                 device=None, fmax_loss=None, fine_tuning=False):
+        self.audio_files = list(Path(dir).rglob('*.wav'))
         random.seed(1234)
         if shuffle:
             random.shuffle(self.audio_files)
@@ -106,19 +111,14 @@ class MelDataset(torch.utils.data.Dataset):
         self._cache_ref_count = 0
         self.device = device
         self.fine_tuning = fine_tuning
-        self.base_mels_path = base_mels_path
 
     def __getitem__(self, index):
         filename = self.audio_files[index]
         if self._cache_ref_count == 0:
-            audio, sampling_rate = load_wav(filename)
-            audio = audio / MAX_WAV_VALUE
+            audio = load_audio(filename)
             if not self.fine_tuning:
                 audio = normalize(audio) * 0.95
             self.cached_wav = audio
-            if sampling_rate != self.sampling_rate:
-                raise ValueError("{} SR doesn't match target {} SR".format(
-                    sampling_rate, self.sampling_rate))
             self._cache_ref_count = self.n_cache_reuse
         else:
             audio = self.cached_wav
@@ -140,8 +140,7 @@ class MelDataset(torch.utils.data.Dataset):
                                   self.sampling_rate, self.hop_size, self.win_size, self.fmin, self.fmax,
                                   center=False)
         else:
-            mel = np.load(
-                os.path.join(self.base_mels_path, os.path.splitext(os.path.split(filename)[-1])[0] + '.npy'))
+            mel = np.load(f"{str(filename)[:-4]}.npy")
             mel = torch.from_numpy(mel)
 
             if len(mel.shape) < 3:
@@ -162,7 +161,7 @@ class MelDataset(torch.utils.data.Dataset):
                                    self.sampling_rate, self.hop_size, self.win_size, self.fmin, self.fmax_loss,
                                    center=False)
 
-        return (mel.squeeze(), audio.squeeze(0), filename, mel_loss.squeeze())
+        return (mel.squeeze(), audio.squeeze(0), str(filename), mel_loss.squeeze())
 
     def __len__(self):
         return len(self.audio_files)
