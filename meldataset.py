@@ -150,7 +150,7 @@ class MelDataset(torch.utils.data.Dataset):
                 frames_per_seg = math.ceil(self.segment_size / self.hop_size)
 
                 if audio.size(1) >= self.segment_size:
-                    mel_start = random.randint(0, mel.size(2) - frames_per_seg - 1)
+                    mel_start = random.randint(0, mel.size(2) - frames_per_seg)
                     mel = mel[:, :, mel_start:mel_start + frames_per_seg]
                     audio = audio[:, mel_start * self.hop_size:(mel_start + frames_per_seg) * self.hop_size]
                 else:
