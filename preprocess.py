@@ -63,7 +63,9 @@ def main(dir):
     for path in tqdm(paths):
         wav = load_audio(path)
         mel = compute_melspectrogram(wav, 24000)
-        path = f"{str(path)[:-4]}.npy"
+        path = str(path)
+        is_wav = path[-3:] == "wav"
+        path = f"{path[:-4]}.npy" if is_wav else f"{path[:-5]}.npy"
         np.save(path, mel)
 
 
