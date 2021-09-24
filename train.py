@@ -30,7 +30,7 @@ def train(rank, a, h):
                            world_size=h.dist_config['world_size'] * h.num_gpus, rank=rank)
 
     torch.cuda.manual_seed(h.seed)
-    device = torch.device('cuda:{:d}'.format(rank))
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     generator = FreGAN(h).to(device)
     mpd = ResWiseMultiPeriodDiscriminator().to(device)

@@ -59,7 +59,7 @@ def compute_melspectrogram(wav, sr, n_fft=1024, num_mels=80, sampling_rate=24000
 
 
 def main(dir):
-    paths = list(Path(dir).rglob('*.wav'))
+    paths = list(Path(dir).rglob('*.wav')) + list(Path(dir).rglob('*mic2.flac'))
     for path in tqdm(paths):
         wav = load_audio(path)
         mel = compute_melspectrogram(wav, 24000)

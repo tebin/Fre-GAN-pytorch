@@ -92,7 +92,7 @@ class MelDataset(torch.utils.data.Dataset):
     def __init__(self, dir, segment_size, n_fft, num_mels,
                  hop_size, win_size, sampling_rate,  fmin, fmax, split=True, shuffle=True, n_cache_reuse=1,
                  device=None, fmax_loss=None, fine_tuning=False):
-        self.audio_files = list(Path(dir).rglob('*.wav'))
+        self.audio_files = list(Path(dir).rglob('*.wav')) + list(Path(dir).rglob('*mic2.flac'))
         random.seed(1234)
         if shuffle:
             random.shuffle(self.audio_files)
@@ -140,7 +140,10 @@ class MelDataset(torch.utils.data.Dataset):
                                   self.sampling_rate, self.hop_size, self.win_size, self.fmin, self.fmax,
                                   center=False)
         else:
-            mel = np.load(f"{str(filename)[:-4]}.npy")
+            path = str(filename)
+            is_wav = path[-3:] == "wav"
+            path = f"{path[:-4]}.npy" if is_wav else f"{path[:-5]}.npy"
+            mel = np.load(path)
             mel = torch.from_numpy(mel)
 
             if len(mel.shape) < 3:
