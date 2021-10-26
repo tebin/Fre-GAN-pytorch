@@ -197,8 +197,8 @@ def train(rank, a, h):
                 if steps % a.summary_interval == 0:
                     sw.add_scalar("training/gen_loss_total", loss_gen_all, steps)
                     sw.add_scalar("training/mel_spec_error", mel_error, steps)
-                    sw.add_scalar("training/g_lr", scheduler_g.get_last_lr(), steps)
-                    sw.add_scalar("training/d_lr", scheduler_d.get_last_lr(), steps)
+                    sw.add_scalar("training/g_lr", scheduler_g.get_last_lr()[0], steps)
+                    sw.add_scalar("training/d_lr", scheduler_d.get_last_lr()[0], steps)
 
                 # Validation
                 if steps % a.validation_interval == 0:  # and steps != 0:
