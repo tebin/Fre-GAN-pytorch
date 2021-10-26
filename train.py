@@ -20,6 +20,7 @@ from discriminator import ResWiseMultiPeriodDiscriminator, ResWiseMultiScaleDisc
 from loss import feature_loss, generator_loss, discriminator_loss
 from utils import plot_spectrogram, scan_checkpoint, load_checkpoint, save_checkpoint
 from stft_loss import MultiResolutionSTFTLoss
+from optim import Lookahead, RAdam
 
 torch.backends.cudnn.benchmark = True
 
@@ -63,16 +64,17 @@ def train(rank, a, h):
         mpd = DistributedDataParallel(mpd, device_ids=[rank]).to(device)
         msd = DistributedDataParallel(msd, device_ids=[rank]).to(device)
 
-    optim_g = torch.optim.AdamW(generator.parameters(), h.learning_rate, betas=[h.adam_b1, h.adam_b2])
-    optim_d = torch.optim.AdamW(itertools.chain(msd.parameters(), mpd.parameters()),
-                                h.learning_rate, betas=[h.adam_b1, h.adam_b2])
+    optim_g = Lookahead(RAdam(generator.parameters(), h.learning_rate, betas=[h.adam_b1, h.adam_b2]))
+    optim_d = Lookahead(RAdam(itertools.chain(msd.parameters(), mpd.parameters()),
+                                h.learning_rate, betas=[h.adam_b1, h.adam_b2]))
 
     if state_dict_do is not None:
         optim_g.load_state_dict(state_dict_do['optim_g'])
         optim_d.load_state_dict(state_dict_do['optim_d'])
 
-    scheduler_g = torch.optim.lr_scheduler.ExponentialLR(optim_g, gamma=h.lr_decay, last_epoch=last_epoch)
-    scheduler_d = torch.optim.lr_scheduler.ExponentialLR(optim_d, gamma=h.lr_decay, last_epoch=last_epoch)
+    step = steps if steps > 0 else -1
+    scheduler_g = torch.optim.lr_scheduler.MultiStepLR(optim_g, milestones=[200000, 400000, 600000, 800000], gamma=h.lr_decay, last_epoch=step)
+    scheduler_d = torch.optim.lr_scheduler.MultiStepLR(optim_d, milestones=[200000, 400000, 600000, 800000], gamma=h.lr_decay, last_epoch=step)
 
     # training_filelist, validation_filelist = get_dataset_filelist(a)
 
@@ -195,6 +197,8 @@ def train(rank, a, h):
                 if steps % a.summary_interval == 0:
                     sw.add_scalar("training/gen_loss_total", loss_gen_all, steps)
                     sw.add_scalar("training/mel_spec_error", mel_error, steps)
+                    sw.add_scalar("training/g_lr", scheduler_g.get_last_lr(), steps)
+                    sw.add_scalar("training/d_lr", scheduler_d.get_last_lr(), steps)
 
                 # Validation
                 if steps % a.validation_interval == 0:  # and steps != 0:
@@ -230,8 +234,8 @@ def train(rank, a, h):
 
             steps += 1
 
-        scheduler_g.step()
-        scheduler_d.step()
+            scheduler_g.step()
+            scheduler_d.step()
 
         if rank == 0:
             print('Time taken for epoch {} is {} sec\n'.format(epoch + 1, int(time.time() - start)))

@@ -30,7 +30,7 @@ def spectral_normalize_torch(magnitudes):
     return output
 
 
-def compute_melspectrogram(wav, sr, n_fft=1024, num_mels=80, sampling_rate=24000, hop_size=240, win_size=1024, fmin=0.0, fmax=8000.0, center=False):
+def compute_melspectrogram(wav, sr, n_fft=1024, num_mels=80, sampling_rate=24000, hop_size=240, win_size=1024, fmin=0, fmax=8000, center=False):
     y = torch.tensor(wav, device="cuda").unsqueeze(0)
 
     if torch.min(y) < -1.:
