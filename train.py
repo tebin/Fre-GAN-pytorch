@@ -80,8 +80,7 @@ def train(rank, a, h):
 
     trainset = MelDataset(a.train_dir, h.segment_size, h.n_fft, h.num_mels,
                           h.hop_size, h.win_size, h.sampling_rate, h.fmin, h.fmax, n_cache_reuse=0,
-                          shuffle=False if h.num_gpus > 1 else True, fmax_loss=h.fmax_for_loss, device=device,
-                          fine_tuning=a.fine_tuning)
+                          shuffle=False if h.num_gpus > 1 else True, fmax_loss=h.fmax_for_loss, device=device)
 
     train_sampler = DistributedSampler(trainset) if h.num_gpus > 1 else None
 
@@ -94,7 +93,7 @@ def train(rank, a, h):
     if rank == 0:
         validset = MelDataset(a.val_dir, h.segment_size, h.n_fft, h.num_mels,
                               h.hop_size, h.win_size, h.sampling_rate, h.fmin, h.fmax, False, False, n_cache_reuse=0,
-                              fmax_loss=h.fmax_for_loss, device=device, fine_tuning=a.fine_tuning)
+                              fmax_loss=h.fmax_for_loss, device=device)
         validation_loader = DataLoader(validset, num_workers=1, shuffle=False,
                                        sampler=None,
                                        batch_size=1,
@@ -117,10 +116,12 @@ def train(rank, a, h):
         for i, batch in enumerate(train_loader):
             if rank == 0:
                 start_b = time.time()
-            x, y, _, y_mel = batch
+            x, y = batch
             x = torch.autograd.Variable(x.to(device, non_blocking=True))
             y = torch.autograd.Variable(y.to(device, non_blocking=True))
-            y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
+            #y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
+            y_mel = mel_spectrogram(y, h.n_fft, h.num_mels, h.sampling_rate, h.hop_size,
+                                    h.win_size, h.fmin, h.fmax_for_loss)
 
             y = y.unsqueeze(1)
 
@@ -207,9 +208,11 @@ def train(rank, a, h):
                     val_err_tot = 0
                     with torch.no_grad():
                         for j, batch in enumerate(validation_loader):
-                            x, y, _, y_mel = batch
+                            x, y = batch
                             y_g_hat = generator(x.to(device))
-                            y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
+                            #y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
+                            y_mel = mel_spectrogram(y.to(device), h.n_fft, h.num_mels, h.sampling_rate, h.hop_size,
+                                                    h.win_size, h.fmin, h.fmax_for_loss)
                             y_g_hat_mel = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft, h.num_mels, h.sampling_rate,
                                                           h.hop_size, h.win_size,
                                                           h.fmin, h.fmax_for_loss)
@@ -255,7 +258,6 @@ def main():
     parser.add_argument('--checkpoint_interval', default=5000, type=int)
     parser.add_argument('--summary_interval', default=100, type=int)
     parser.add_argument('--validation_interval', default=1000, type=int)
-    parser.add_argument('--fine_tuning', default=True, type=bool)
 
     a = parser.parse_args()
 

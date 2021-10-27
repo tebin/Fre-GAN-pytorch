@@ -9,6 +9,7 @@ import librosa
 from librosa.util import normalize
 import soundfile as sf
 from librosa.filters import mel as librosa_mel_fn
+import fastrand
 
 MAX_WAV_VALUE = 32768.0
 
@@ -91,9 +92,10 @@ def get_dataset_filelist(a):
 class MelDataset(torch.utils.data.Dataset):
     def __init__(self, dir, segment_size, n_fft, num_mels,
                  hop_size, win_size, sampling_rate,  fmin, fmax, split=True, shuffle=True, n_cache_reuse=1,
-                 device=None, fmax_loss=None, fine_tuning=False):
+                 device=None, fmax_loss=None):
         self.audio_files = list(Path(dir).rglob('*.wav')) + list(Path(dir).rglob('*mic2.flac'))
         random.seed(1234)
+        fastrand.pcg32_seed(1234)
         if shuffle:
             random.shuffle(self.audio_files)
         self.segment_size = segment_size
@@ -110,14 +112,12 @@ class MelDataset(torch.utils.data.Dataset):
         self.n_cache_reuse = n_cache_reuse
         self._cache_ref_count = 0
         self.device = device
-        self.fine_tuning = fine_tuning
+        self.frames_per_seg = self.segment_size // self.hop_size
 
     def __getitem__(self, index):
         filename = self.audio_files[index]
         if self._cache_ref_count == 0:
             audio = load_audio(filename)
-            if not self.fine_tuning:
-                audio = normalize(audio) * 0.95
             self.cached_wav = audio
             self._cache_ref_count = self.n_cache_reuse
         else:
@@ -125,46 +125,23 @@ class MelDataset(torch.utils.data.Dataset):
             self._cache_ref_count -= 1
 
         audio = torch.FloatTensor(audio)
-        audio = audio.unsqueeze(0)
 
-        if not self.fine_tuning:
-            if self.split:
-                if audio.size(1) >= self.segment_size:
-                    max_audio_start = audio.size(1) - self.segment_size
-                    audio_start = random.randint(0, max_audio_start)
-                    audio = audio[:, audio_start:audio_start+self.segment_size]
-                else:
-                    audio = torch.nn.functional.pad(audio, (0, self.segment_size - audio.size(1)), 'constant')
+        path = str(filename)
+        is_wav = path[-3:] == "wav"
+        path = f"{path[:-4]}.npy" if is_wav else f"{path[:-5]}.npy"
+        mel = np.load(path)
+        mel = torch.from_numpy(mel)
 
-            mel = mel_spectrogram(audio, self.n_fft, self.num_mels,
-                                  self.sampling_rate, self.hop_size, self.win_size, self.fmin, self.fmax,
-                                  center=False)
-        else:
-            path = str(filename)
-            is_wav = path[-3:] == "wav"
-            path = f"{path[:-4]}.npy" if is_wav else f"{path[:-5]}.npy"
-            mel = np.load(path)
-            mel = torch.from_numpy(mel)
+        if self.split:
+            mel_start = fastrand.pcg32bounded(mel.size(1) - self.frames_per_seg)
+            mel = mel[:, mel_start:mel_start + self.frames_per_seg]
+            audio = audio[mel_start * self.hop_size:(mel_start + self.frames_per_seg) * self.hop_size]
 
-            if len(mel.shape) < 3:
-                mel = mel.unsqueeze(0)
+        #mel_loss = mel_spectrogram(audio, self.n_fft, self.num_mels,
+        #                           self.sampling_rate, self.hop_size, self.win_size, self.fmin, self.fmax_loss,
+        #                           center=False)
 
-            if self.split:
-                frames_per_seg = math.ceil(self.segment_size / self.hop_size)
-
-                if audio.size(1) >= self.segment_size:
-                    mel_start = random.randint(0, mel.size(2) - frames_per_seg)
-                    mel = mel[:, :, mel_start:mel_start + frames_per_seg]
-                    audio = audio[:, mel_start * self.hop_size:(mel_start + frames_per_seg) * self.hop_size]
-                else:
-                    mel = torch.nn.functional.pad(mel, (0, frames_per_seg - mel.size(2)), 'constant')
-                    audio = torch.nn.functional.pad(audio, (0, self.segment_size - audio.size(1)), 'constant')
-
-        mel_loss = mel_spectrogram(audio, self.n_fft, self.num_mels,
-                                   self.sampling_rate, self.hop_size, self.win_size, self.fmin, self.fmax_loss,
-                                   center=False)
-
-        return (mel.squeeze(), audio.squeeze(0), str(filename), mel_loss.squeeze())
+        return (mel, audio)
 
     def __len__(self):
         return len(self.audio_files)
