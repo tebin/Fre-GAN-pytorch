@@ -9,7 +9,6 @@ import librosa
 from librosa.util import normalize
 import soundfile as sf
 from librosa.filters import mel as librosa_mel_fn
-import fastrand
 
 MAX_WAV_VALUE = 32768.0
 
@@ -93,9 +92,8 @@ class MelDataset(torch.utils.data.Dataset):
     def __init__(self, dir, segment_size, n_fft, num_mels,
                  hop_size, win_size, sampling_rate,  fmin, fmax, split=True, shuffle=True, n_cache_reuse=1,
                  device=None, fmax_loss=None):
-        self.audio_files = list(Path(dir).rglob('*.wav')) + list(Path(dir).rglob('*mic2.flac'))
+        self.audio_files = list(Path(dir).rglob('*.npz'))
         random.seed(1234)
-        fastrand.pcg32_seed(1234)
         if shuffle:
             random.shuffle(self.audio_files)
         self.segment_size = segment_size
@@ -116,31 +114,8 @@ class MelDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         filename = self.audio_files[index]
-        if self._cache_ref_count == 0:
-            audio = load_audio(filename)
-            self.cached_wav = audio
-            self._cache_ref_count = self.n_cache_reuse
-        else:
-            audio = self.cached_wav
-            self._cache_ref_count -= 1
-
-        audio = torch.FloatTensor(audio)
-
-        path = str(filename)
-        is_wav = path[-3:] == "wav"
-        path = f"{path[:-4]}.npy" if is_wav else f"{path[:-5]}.npy"
-        mel = np.load(path)
-        mel = torch.from_numpy(mel)
-
-        if self.split:
-            mel_start = fastrand.pcg32bounded(mel.size(1) - self.frames_per_seg)
-            mel = mel[:, mel_start:mel_start + self.frames_per_seg]
-            audio = audio[mel_start * self.hop_size:(mel_start + self.frames_per_seg) * self.hop_size]
-
-        #mel_loss = mel_spectrogram(audio, self.n_fft, self.num_mels,
-        #                           self.sampling_rate, self.hop_size, self.win_size, self.fmin, self.fmax_loss,
-        #                           center=False)
-
+        npz = np.load(filename)
+        mel, audio = torch.FloatTensor(npz['mel']), torch.FloatTensor(npz['wav'])
         return (mel, audio)
 
     def __len__(self):

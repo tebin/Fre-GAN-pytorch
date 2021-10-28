@@ -58,19 +58,33 @@ def compute_melspectrogram(wav, sr, n_fft=1024, num_mels=80, sampling_rate=24000
     return spec.squeeze(0).cpu().numpy()
 
 
-def main(dir):
+def main(dir, split, chunk_size, hop_size):
+    outdir = f'{dir}_out'
+    Path(outdir).mkdir(parents=True, exist_ok=True)
     paths = list(Path(dir).rglob('*.wav')) + list(Path(dir).rglob('*mic2.flac'))
+    i = 0
     for path in tqdm(paths):
         wav = load_audio(path)
         mel = compute_melspectrogram(wav, 24000)
-        path = str(path)
-        is_wav = path[-3:] == "wav"
-        path = f"{path[:-4]}.npy" if is_wav else f"{path[:-5]}.npy"
-        np.save(path, mel)
+        if split:
+            mel_indices = np.arange(0, mel.shape[1], chunk_size)[1:]
+            wav_indices = mel_indices * hop_size
+            mel = np.split(mel, mel_indices, axis=1)
+            wav = np.split(wav, wav_indices)
+            for mel, wav in zip(mel, wav):
+                if mel.shape[1] == chunk_size and wav.shape[0] == chunk_size * hop_size:
+                    np.savez(f'{outdir}/{i}.npz', mel=mel, wav=wav)
+                    i += 1
+        else:
+            np.savez(f'{outdir}/{i}.npz', mel=mel, wav=wav)
+            i += 1
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('dir', type=str)
+    parser.add_argument('--split', action='store_true', default=False)
+    parser.add_argument('--chunk_size', default=32, type=int)
+    parser.add_argument('--hop_size', default=240, type=int)
     args = parser.parse_args()
-    main(args.dir)
+    main(args.dir, args.split, args.chunk_size, args.hop_size)
