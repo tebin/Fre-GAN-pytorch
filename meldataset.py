@@ -90,7 +90,7 @@ def get_dataset_filelist(a):
 
 class MelDataset(torch.utils.data.Dataset):
     def __init__(self, dir, segment_size, n_fft, num_mels,
-                 hop_size, win_size, sampling_rate,  fmin, fmax, split=True, shuffle=True, n_cache_reuse=1,
+                 hop_size, win_size, sampling_rate, fmin, fmax, split=False, shuffle=True, n_cache_reuse=1,
                  device=None, fmax_loss=None):
         self.audio_files = list(Path(dir).rglob('*.npz'))
         random.seed(1234)

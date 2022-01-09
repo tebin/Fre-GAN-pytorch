@@ -79,7 +79,7 @@ def train(rank, a, h):
     # training_filelist, validation_filelist = get_dataset_filelist(a)
 
     trainset = MelDataset(a.train_dir, h.segment_size, h.n_fft, h.num_mels,
-                          h.hop_size, h.win_size, h.sampling_rate, h.fmin, h.fmax, n_cache_reuse=0,
+                          h.hop_size, h.win_size, h.sampling_rate, h.fmin, h.fmax, split=a.split, n_cache_reuse=0,
                           shuffle=False if h.num_gpus > 1 else True, fmax_loss=h.fmax_for_loss, device=device)
 
     train_sampler = DistributedSampler(trainset) if h.num_gpus > 1 else None
@@ -92,8 +92,8 @@ def train(rank, a, h):
 
     if rank == 0:
         validset = MelDataset(a.val_dir, h.segment_size, h.n_fft, h.num_mels,
-                              h.hop_size, h.win_size, h.sampling_rate, h.fmin, h.fmax, False, False, n_cache_reuse=0,
-                              fmax_loss=h.fmax_for_loss, device=device)
+                              h.hop_size, h.win_size, h.sampling_rate, h.fmin, h.fmax, split=False, shuffle=False,
+                              n_cache_reuse=0, fmax_loss=h.fmax_for_loss, device=device)
         validation_loader = DataLoader(validset, num_workers=1, shuffle=False,
                                        sampler=None,
                                        batch_size=1,
@@ -258,6 +258,7 @@ def main():
     parser.add_argument('--checkpoint_interval', default=5000, type=int)
     parser.add_argument('--summary_interval', default=100, type=int)
     parser.add_argument('--validation_interval', default=1000, type=int)
+    parser.add_argument('--split', action='store_true', default=False)
 
     a = parser.parse_args()
 
