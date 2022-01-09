@@ -30,7 +30,7 @@ def spectral_normalize_torch(magnitudes):
     return output
 
 
-def compute_melspectrogram(wav, sr, n_fft=1024, num_mels=80, sampling_rate=24000, hop_size=240, win_size=1024, fmin=0, fmax=8000, center=False):
+def compute_melspectrogram(wav, sr, n_fft=1024, num_mels=80, hop_size=240, win_size=1024, fmin=0, fmax=8000, center=False):
     y = torch.tensor(wav, device="cuda").unsqueeze(0)
 
     if torch.min(y) < -1.:
@@ -40,7 +40,7 @@ def compute_melspectrogram(wav, sr, n_fft=1024, num_mels=80, sampling_rate=24000
 
     global mel_basis, hann_window
     if fmax not in mel_basis:
-        mel = librosa_mel_fn(sampling_rate, n_fft, num_mels, fmin, fmax)
+        mel = librosa_mel_fn(sr, n_fft, num_mels, fmin, fmax)
         mel_basis[str(fmax)+'_'+str(y.device)] = torch.from_numpy(mel).float().to(y.device)
         hann_window[str(y.device)] = torch.hann_window(win_size).to(y.device)
 
@@ -58,14 +58,14 @@ def compute_melspectrogram(wav, sr, n_fft=1024, num_mels=80, sampling_rate=24000
     return spec.squeeze(0).cpu().numpy()
 
 
-def main(dir, split, chunk_size, hop_size):
+def main(dir, split, chunk_size, hop_size, sampling_rate, fmin, fmax):
     outdir = f'{dir}_out'
     Path(outdir).mkdir(parents=True, exist_ok=True)
     paths = list(Path(dir).rglob('*.wav')) + list(Path(dir).rglob('*mic2.flac'))
     i = 0
     for path in tqdm(paths):
         wav = load_audio(path)
-        mel = compute_melspectrogram(wav, 24000)
+        mel = compute_melspectrogram(wav, sampling_rate, fmin=fmin, fmax=fmax)
         if split:
             mel_indices = np.arange(0, mel.shape[1], chunk_size)[1:]
             wav_indices = mel_indices * hop_size
@@ -86,5 +86,8 @@ if __name__ == "__main__":
     parser.add_argument('--split', action='store_true', default=False)
     parser.add_argument('--chunk_size', default=32, type=int)
     parser.add_argument('--hop_size', default=240, type=int)
+    parser.add_argument('--sampling_rate', default=24000, type=int)
+    parser.add_argument('--fmin', default=0, type=int)
+    parser.add_argument('--fmax', default=12000, type=int)
     args = parser.parse_args()
-    main(args.dir, args.split, args.chunk_size, args.hop_size)
+    main(args.dir, args.split, args.chunk_size, args.hop_size, args.sampling_rate, args.fmin, args.fmax)
