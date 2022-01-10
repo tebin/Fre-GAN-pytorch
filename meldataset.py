@@ -118,9 +118,13 @@ class MelDataset(torch.utils.data.Dataset):
         npz = np.load(filename)
         mel, audio = torch.FloatTensor(npz['mel']), torch.FloatTensor(npz['wav'])
         if self.split:
-            mel_start = fastrand.pcg32bounded(mel.size(1) - self.frames_per_seg)
-            mel = mel[:, mel_start:mel_start + self.frames_per_seg]
-            audio = audio[mel_start * self.hop_size:(mel_start + self.frames_per_seg) * self.hop_size]
+            if len(audio) > self.segment_size:
+                mel_start = fastrand.pcg32bounded(mel.size(1) - self.frames_per_seg)
+                mel = mel[:, mel_start:mel_start + self.frames_per_seg]
+                audio = audio[mel_start * self.hop_size:(mel_start + self.frames_per_seg) * self.hop_size]
+            else:
+                mel = torch.nn.functional.pad(mel, (0, self.frames_per_seg - mel.size(1)), 'constant')
+                audio = torch.nn.functional.pad(audio, (0, self.segment_size - len(audio)), 'constant')
         return (mel, audio)
 
     def __len__(self):
