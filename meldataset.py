@@ -9,7 +9,6 @@ import librosa
 from librosa.util import normalize
 import soundfile as sf
 from librosa.filters import mel as librosa_mel_fn
-import fastrand
 
 MAX_WAV_VALUE = 32768.0
 
@@ -119,7 +118,7 @@ class MelDataset(torch.utils.data.Dataset):
         mel, audio = torch.FloatTensor(npz['mel']), torch.FloatTensor(npz['wav'])
         if self.split:
             if len(audio) > self.segment_size:
-                mel_start = fastrand.pcg32bounded(mel.size(1) - self.frames_per_seg)
+                mel_start = random.randint(mel.size(1) - self.frames_per_seg)
                 mel = mel[:, mel_start:mel_start + self.frames_per_seg]
                 audio = audio[mel_start * self.hop_size:(mel_start + self.frames_per_seg) * self.hop_size]
             else:
