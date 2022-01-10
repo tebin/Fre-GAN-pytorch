@@ -118,7 +118,7 @@ class MelDataset(torch.utils.data.Dataset):
         mel, audio = torch.FloatTensor(npz['mel']), torch.FloatTensor(npz['wav'])
         if self.split:
             if len(audio) > self.segment_size:
-                mel_start = random.randint(mel.size(1) - self.frames_per_seg)
+                mel_start = random.randint(0, mel.size(1) - self.frames_per_seg)
                 mel = mel[:, mel_start:mel_start + self.frames_per_seg]
                 audio = audio[mel_start * self.hop_size:(mel_start + self.frames_per_seg) * self.hop_size]
             else:
