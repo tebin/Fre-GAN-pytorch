@@ -210,6 +210,7 @@ def train(rank, a, h):
                         for j, batch in enumerate(validation_loader):
                             x, y = batch
                             y_g_hat = generator(x.to(device))
+                            y_g_hat = y_g_hat[:, :, :y.shape[-1]]
                             #y_mel = torch.autograd.Variable(y_mel.to(device, non_blocking=True))
                             y_mel = mel_spectrogram(y.to(device), h.n_fft, h.num_mels, h.sampling_rate, h.hop_size,
                                                     h.win_size, h.fmin, h.fmax_for_loss)
